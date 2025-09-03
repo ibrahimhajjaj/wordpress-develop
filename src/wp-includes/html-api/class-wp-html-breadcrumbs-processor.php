@@ -117,6 +117,13 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 		$names       = (array) $this->get_breadcrumbs();
 		$names_count = count( $names );
 
+		// Fallback for robustness when breadcrumbs are unexpectedly empty.
+		if ( 0 === $names_count ) {
+			$names       = array( 'HTML', 'BODY' );
+			$names_count = 2;
+		}
+
+		$current_serial = $this->serialize_token();
 		for ( $level = 0; $level < $names_count; $level++ ) {
 			$tag        = $names[ $level ];
 			$namespace  = 'html';
@@ -124,13 +131,13 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 			$attributes = array();
 
 			if ( $this->track_indices && $level > 1 ) {
-				$calc = $this->compute_index_and_attributes_for_path( $names, $level, $this->track_attributes ? $this->attribute_allowlist : array() );
+				$calc = $this->compute_index_and_attributes_for_path( $names, $level, $this->track_attributes ? $this->attribute_allowlist : array(), ( $level === $names_count - 1 ? $current_serial : null ) );
 				$index = $calc['index'];
 				if ( $this->track_attributes ) {
 					$attributes = $calc['attributes'];
 				}
 			} elseif ( $this->track_attributes && $level <= 1 ) {
-				$calc       = $this->compute_index_and_attributes_for_path( $names, $level, $this->attribute_allowlist );
+				$calc       = $this->compute_index_and_attributes_for_path( $names, $level, $this->attribute_allowlist, null );
 				$attributes = $calc['attributes'];
 			}
 
@@ -151,7 +158,7 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 	public function get_xpath_for_current(): ?string {
 		$crumbs = $this->get_element_breadcrumbs();
 		if ( empty( $crumbs ) ) {
-			return null;
+			return '/HTML/BODY';
 		}
 
 		$parts = array();
@@ -195,9 +202,10 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 	 * @param string[] $crumbs     Full breadcrumb names for current location.
 	 * @param int      $level      Zero-based level to compute (0=HTML).
 	 * @param string[] $attr_allow Attributes to resolve (id/role/class).
+	 * @param string|null $current_serial Serialization of the current token; when provided, match exactly this element.
 	 * @return array{index:?int,attributes:array}
 	 */
-	private function compute_index_and_attributes_for_path( array $crumbs, int $level, array $attr_allow ): array {
+	private function compute_index_and_attributes_for_path( array $crumbs, int $level, array $attr_allow, ?string $current_serial ): array {
 		$index      = null;
 		$attributes = array();
 
@@ -210,7 +218,7 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 		}
 
 		// Build a query that matches direct children of the parent at this level.
-		$child_query_path = $parent_path;
+		$child_query_path   = $parent_path;
 		$child_query_path[] = '*';
 
 		$counter = 0;
@@ -218,6 +226,13 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 			$counter++;
 			$bc = $scanner->get_breadcrumbs();
 			if ( $bc === $target_path ) {
+				if ( isset( $current_serial ) ) {
+					// Only treat as the current node if the token serialization matches.
+					$serial_match = $scanner->serialize_token();
+					if ( $serial_match !== $current_serial ) {
+						continue;
+					}
+				}
 				$index = $counter;
 				if ( ! empty( $attr_allow ) ) {
 					foreach ( $attr_allow as $name ) {
