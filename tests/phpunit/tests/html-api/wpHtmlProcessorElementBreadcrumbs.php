@@ -378,7 +378,9 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	 */
 	public function test_get_element_breadcrumbs_malformed_html() {
 		$html = '<div><img src="test.jpg" <div><p>Unclosed tags</p>';
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		// Should still be able to find the IMG element even in malformed HTML
 		$this->assertTrue( $processor->next_tag( 'IMG' ), 'Should find IMG element even in malformed HTML.' );

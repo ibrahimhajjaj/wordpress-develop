@@ -227,7 +227,6 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 			$bc = $scanner->get_breadcrumbs();
 			if ( $bc === $target_path ) {
 				if ( isset( $current_serial ) ) {
-					// Only treat as the current node if the token serialization matches.
 					$serial_match = $scanner->serialize_token();
 					if ( $serial_match !== $current_serial ) {
 						continue;
