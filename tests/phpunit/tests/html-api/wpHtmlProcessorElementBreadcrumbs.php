@@ -9,14 +9,14 @@
  *
  * @group html-api
  *
- * @coversDefaultClass WP_HTML_Processor
+ * @coversDefaultClass WP_HTML_Breadcrumbs_Processor
  */
 class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 *
 	 * @dataProvider data_element_breadcrumbs_basic
 	 *
@@ -25,7 +25,9 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	 * @param array  $expected    Expected element breadcrumbs structure.
 	 */
 	public function test_get_element_breadcrumbs_basic( $html, $target_tag, $expected ) {
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertTrue( $processor->next_tag( $target_tag ), "Failed to find {$target_tag} element in HTML." );
 
@@ -153,7 +155,7 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 *
 	 * @dataProvider data_element_breadcrumbs_indexing
 	 *
@@ -163,7 +165,9 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	 * @param array  $expected    Expected element breadcrumbs structure.
 	 */
 	public function test_get_element_breadcrumbs_indexing( $html, $target_tag, $match_n, $expected ) {
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$found_count = 0;
 		while ( $processor->next_tag( $target_tag ) ) {
@@ -222,11 +226,13 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_deep_nesting() {
 		$html = '<div><div><div><div><div><img src="deep.jpg"></div></div></div></div></div>';
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertTrue( $processor->next_tag( 'IMG' ), 'Failed to find IMG element in deeply nested HTML.' );
 
@@ -249,10 +255,12 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_empty_html() {
-		$processor = WP_HTML_Processor::create_fragment( '' );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( '' );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertFalse( $processor->next_tag( 'IMG' ), 'Should not find IMG in empty HTML.' );
 	}
@@ -260,11 +268,13 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_no_target_element() {
 		$html = '<div><p>No images here</p><span>Just text</span></div>';
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertFalse( $processor->next_tag( 'IMG' ), 'Should not find IMG when none exists.' );
 	}
@@ -272,11 +282,13 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_special_characters() {
 		$html = '<div class="test-class" id="test-id" data-value="special & chars"><img src="test.jpg" alt="Image & Description"></div>';
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertTrue( $processor->next_tag( 'IMG' ), 'Failed to find IMG element with special characters.' );
 
@@ -293,11 +305,13 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_self_closing_elements() {
 		$html = '<div><br><hr><img src="test.jpg"><input type="text"></div>';
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertTrue( $processor->next_tag( 'IMG' ), 'Failed to find IMG element among self-closing elements.' );
 
@@ -311,11 +325,13 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_performance() {
 		$html = str_repeat( '<div class="item"><span>Item</span><img src="item.jpg"></div>', 100 );
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$count = 0;
 		while ( $processor->next_tag( 'IMG' ) ) {
@@ -333,11 +349,13 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_consistency_with_get_breadcrumbs() {
 		$html = '<div class="container"><header><div><img src="test.jpg"></div></header></div>';
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertTrue( $processor->next_tag( 'IMG' ), 'Failed to find IMG element.' );
 
@@ -356,7 +374,7 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_malformed_html() {
 		$html = '<div><img src="test.jpg" <div><p>Unclosed tags</p>';
@@ -387,7 +405,7 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	/**
 	 * @ticket 63020
 	 *
-	 * @covers WP_HTML_Processor::get_element_breadcrumbs
+	 * @covers WP_HTML_Breadcrumbs_Processor::get_element_breadcrumbs
 	 */
 	public function test_get_element_breadcrumbs_xpath_generation() {
 		$html = '<div class="wp-site-blocks"><header><div><img src="logo.png"></div></header></div>';

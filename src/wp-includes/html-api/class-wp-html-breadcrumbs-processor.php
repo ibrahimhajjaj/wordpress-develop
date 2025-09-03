@@ -101,72 +101,7 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 	 * Advances the parser and mirrors open/close events for our bookkeeping.
 	 */
 	public function next_token(): bool {
-		$had = parent::next_token();
-		if ( ! $had ) {
-			return false;
-		}
-
-		// Only respond to tag tokens; ignore text/comments/etc.
-		if ( '#tag' !== $this->get_token_type() ) {
-			return true;
-		}
-
-		// Approximate stack transitions from public signals.
-		if ( $this->is_tag_closer() ) {
-			// Pop one frame if present.
-			if ( ! empty( $this->frames ) ) {
-				array_pop( $this->frames );
-			}
-			return true;
-		}
-
-		// Ensure our frames are aligned with current breadcrumbs before pushing.
-		$crumbs = $this->get_breadcrumbs(); // includes HTML/BODY and the current element at the end
-		$need   = max( 0, count( $crumbs ) - 1 /* minus current */ - count( $this->frames ) );
-		if ( $need > 0 ) {
-			$ns = $this->get_namespace();
-			for ( $i = $need; $i > 0; $i-- ) {
-				// Push placeholders for any missing ancestors (no index, no bookmark)
-				$ancestor_tag   = $crumbs[ count( $this->frames ) ];
-				$this->frames[] = array(
-					'tag'       => $ancestor_tag,
-					'namespace' => $ns,
-					'index'     => null,
-					'bookmark'  => null,
-				);
-			}
-		}
-
-		// Push current opener frame.
-		$tag = $this->get_tag();
-		$ns  = $this->get_namespace();
-
-		$index = null;
-		if ( $this->track_indices && 'HTML' !== $tag && ! ( 'BODY' === $tag && 'html' === $ns ) ) {
-			$parent_depth                                 = max( 0, count( $this->frames ) - 1 );
-			$this->child_counts_by_depth[ $parent_depth ] = ( $this->child_counts_by_depth[ $parent_depth ] ?? 0 ) + 1;
-			$index                                        = $this->child_counts_by_depth[ $parent_depth ];
-		}
-
-		$bookmark_name = null;
-		// Attempt to bookmark real tokens to enable lazy attribute reads.
-		if ( $this->track_attributes ) {
-			$candidate = 'wphtmlbp-' . ( ++$this->bookmark_counter );
-			if ( $this->set_bookmark( $candidate ) ) {
-				$bookmark_name = $candidate;
-			}
-		}
-
-		$this->frames[] = array(
-			'tag'       => $tag,
-			'namespace' => $ns,
-			'index'     => $index,
-			'bookmark'  => $bookmark_name,
-		);
-
-		// Initialize child count slot for new depth to zero when we push.
-		$this->child_counts_by_depth[ count( $this->frames ) - 1 ] = ( $this->child_counts_by_depth[ count( $this->frames ) - 1 ] ?? 0 );
-		return true;
+		return parent::next_token();
 	}
 
 	/**
@@ -178,47 +113,33 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 	 * @return array<int,array<string,mixed>>
 	 */
 	public function get_element_breadcrumbs(): array {
-		$result = array();
+		$result      = array();
+		$names       = (array) $this->get_breadcrumbs();
+		$names_count = count( $names );
 
-		// Save our place if we plan to seek for attributes / index computations.
-		$here = null;
-		if ( $this->track_attributes || $this->track_indices ) {
-			$here = 'wphtmlbp-return';
-			$this->set_bookmark( $here );
-		}
-
-		$parent_token = null;
-		foreach ( $this->state->stack_of_open_elements->walk_down() as $token ) {
-			$node_name = $token->node_name;
-			$ns        = $token->namespace;
-
-			$index = null;
-			if ( $this->track_indices && isset( $parent_token ) && 'HTML' !== $node_name && ! ( 'BODY' === $node_name && 'html' === $ns ) ) {
-				$index = $this->compute_direct_child_index( $parent_token, $token, $here );
-			}
-
+		for ( $level = 0; $level < $names_count; $level++ ) {
+			$tag        = $names[ $level ];
+			$namespace  = 'html';
+			$index      = null;
 			$attributes = array();
-			if ( $this->track_attributes && ! empty( $token->bookmark_name ) && $this->seek( $token->bookmark_name ) ) {
-				foreach ( $this->attribute_allowlist as $attr ) {
-					$v = parent::get_attribute( $attr );
-					if ( null !== $v ) {
-						$attributes[ $attr ] = $v;
-					}
+
+			if ( $this->track_indices && $level > 1 ) {
+				$calc = $this->compute_index_and_attributes_for_path( $names, $level, $this->track_attributes ? $this->attribute_allowlist : array() );
+				$index = $calc['index'];
+				if ( $this->track_attributes ) {
+					$attributes = $calc['attributes'];
 				}
+			} elseif ( $this->track_attributes && $level <= 1 ) {
+				$calc       = $this->compute_index_and_attributes_for_path( $names, $level, $this->attribute_allowlist );
+				$attributes = $calc['attributes'];
 			}
 
-			$result[]    = array(
-				'tag'        => $node_name,
-				'namespace'  => $ns,
+			$result[] = array(
+				'tag'        => $tag,
+				'namespace'  => $namespace,
 				'index'      => $index,
 				'attributes' => $attributes,
 			);
-			$parent_token = $token;
-		}
-
-		if ( $here && $this->has_bookmark( $here ) ) {
-			$this->seek( $here );
-			$this->release_bookmark( $here );
 		}
 
 		return $result;
@@ -266,6 +187,51 @@ class WP_HTML_Breadcrumbs_Processor extends WP_HTML_Processor {
 		}
 
 		return implode( '', $parts );
+	}
+
+	/**
+	 * Scans the document to compute index and attributes for the node at the given breadcrumb level.
+	 *
+	 * @param string[] $crumbs     Full breadcrumb names for current location.
+	 * @param int      $level      Zero-based level to compute (0=HTML).
+	 * @param string[] $attr_allow Attributes to resolve (id/role/class).
+	 * @return array{index:?int,attributes:array}
+	 */
+	private function compute_index_and_attributes_for_path( array $crumbs, int $level, array $attr_allow ): array {
+		$index      = null;
+		$attributes = array();
+
+		$parent_path = array_slice( $crumbs, 0, $level );
+		$target_path = array_slice( $crumbs, 0, $level + 1 );
+
+		$scanner = WP_HTML_Processor::create_fragment( $this->html );
+		if ( null === $scanner ) {
+			return array( 'index' => $index, 'attributes' => $attributes );
+		}
+
+		// Build a query that matches direct children of the parent at this level.
+		$child_query_path = $parent_path;
+		$child_query_path[] = '*';
+
+		$counter = 0;
+		while ( $scanner->next_tag( array( 'breadcrumbs' => $child_query_path ) ) ) {
+			$counter++;
+			$bc = $scanner->get_breadcrumbs();
+			if ( $bc === $target_path ) {
+				$index = $counter;
+				if ( ! empty( $attr_allow ) ) {
+					foreach ( $attr_allow as $name ) {
+						$val = $scanner->get_attribute( $name );
+						if ( null !== $val ) {
+							$attributes[ $name ] = $val;
+						}
+					}
+				}
+				break;
+			}
+		}
+
+		return array( 'index' => $index, 'attributes' => $attributes );
 	}
     /**
      * Computes the 1-based index of a child element among its parent's element children
