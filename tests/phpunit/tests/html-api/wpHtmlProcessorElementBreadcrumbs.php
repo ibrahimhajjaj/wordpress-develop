@@ -411,7 +411,9 @@ class Tests_HtmlApi_WpHtmlProcessorElementBreadcrumbs extends WP_UnitTestCase {
 	 */
 	public function test_get_element_breadcrumbs_xpath_generation() {
 		$html = '<div class="wp-site-blocks"><header><div><img src="logo.png"></div></header></div>';
-		$processor = WP_HTML_Processor::create_fragment( $html );
+		$processor = WP_HTML_Breadcrumbs_Processor::create_fragment( $html );
+		$processor->enable_index_tracking( true );
+		$processor->enable_attribute_tracking( true, array( 'id', 'role', 'class' ) );
 
 		$this->assertTrue( $processor->next_tag( 'IMG' ), 'Failed to find IMG element.' );
 

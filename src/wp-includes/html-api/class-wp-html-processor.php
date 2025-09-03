@@ -236,46 +236,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 	private $breadcrumbs = array();
 
 	/**
-	 * Whether to track detailed breadcrumbs (indices and attributes).
-	 *
-	 * Disabled by default to avoid extra overhead unless explicitly enabled.
-	 *
-	 * @since 6.9.0
-	 *
-	 * @var bool
-	 */
-	private $detailed_breadcrumbs_enabled = false;
-
-	/**
-	 * Stores detailed breadcrumbs (tag, namespace, index, attributes) for the open stack.
-	 *
-	 * Each item corresponds to the same position as in {@see self::$breadcrumbs} and is an
-	 * associative array with the following keys:
-	 *  - 'tag'        string   Node name
-	 *  - 'namespace'  string   One of 'html', 'svg', or 'math'
-	 *  - 'index'      int|null 1-based index among element children of the parent; null for HTML/BODY and non-elements
-	 *  - 'attributes' array    Subset of attributes captured at open: id, role, class (when available)
-	 *
-	 * @since 6.9.0
-	 *
-	 * @var array<int, array<string, mixed>>
-	 */
-	private $element_breadcrumbs = array();
-
-	/**
-	 * Tracks counts of encountered element children per depth of the open stack.
-	 *
-	 * The array index represents the depth of the element (0-based) and the value is the
-	 * number of element children already encountered beneath that element. This is used to
-	 * compute stable indices for child elements without backtracking.
-	 *
-	 * @since 6.9.0
-	 *
-	 * @var array<int, int>
-	 */
-	private $element_child_counts_by_depth = array();
-
-	/**
 	 * Current stack event, if set, representing a matched token.
 	 *
 	 * Because the parser may internally point to a place further along in a document
@@ -562,24 +522,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		$fragment_processor->context_node->on_destroy    = null;
 
 		$fragment_processor->breadcrumbs = array( 'HTML', $fragment_processor->context_node->node_name );
-		if ( $this->detailed_breadcrumbs_enabled ) {
-			$fragment_processor->detailed_breadcrumbs_enabled  = true;
-			$fragment_processor->element_breadcrumbs           = array(
-				array(
-					'tag'        => 'HTML',
-					'namespace'  => 'html',
-					'index'      => null,
-					'attributes' => array(),
-				),
-				array(
-					'tag'        => $fragment_processor->context_node->node_name,
-					'namespace'  => $fragment_processor->context_node->namespace,
-					'index'      => null,
-					'attributes' => array(),
-				),
-			);
-			$fragment_processor->element_child_counts_by_depth = array();
-		}
 
 		if ( 'TEMPLATE' === $fragment_processor->context_node->node_name ) {
 			$fragment_processor->state->stack_of_template_insertion_modes[] = WP_HTML_Processor_State::INSERTION_MODE_IN_TEMPLATE;
@@ -798,7 +740,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 		return false;
 	}
-
 	/**
 	 * Finds the next token in the HTML document.
 	 *
@@ -880,53 +821,8 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		// Adjust the breadcrumbs for this event.
 		if ( $is_pop ) {
 			array_pop( $this->breadcrumbs );
-			// Keep detailed breadcrumbs and child counts in sync when enabled.
-			if ( $this->detailed_breadcrumbs_enabled ) {
-				$depth_before_pop = count( $this->element_breadcrumbs );
-				if ( $depth_before_pop > 0 ) {
-					unset( $this->element_child_counts_by_depth[ $depth_before_pop - 1 ] );
-					array_pop( $this->element_breadcrumbs );
-				}
-			}
 		} else {
 			$this->breadcrumbs[] = $this->current_element->token->node_name;
-
-			if ( $this->detailed_breadcrumbs_enabled ) {
-				$token     = $this->current_element->token;
-				$node_name = $token->node_name;
-				$is_elem   = isset( $node_name[0] ) && '#' !== $node_name[0];
-				$index     = null;
-				if ( $is_elem ) {
-					$parent_depth = count( $this->element_breadcrumbs ) - 1; // 0-based depth of parent.
-					if ( $parent_depth >= 0 ) {
-						$current_count = isset( $this->element_child_counts_by_depth[ $parent_depth ] ) ? $this->element_child_counts_by_depth[ $parent_depth ] : 0;
-						$index         = $current_count + 1; // 1-based index among element children.
-						$this->element_child_counts_by_depth[ $parent_depth ] = $index;
-					}
-
-					// Leave indices null for HTML and BODY to avoid ambiguity at root levels.
-					if ( 'HTML' === $node_name || ( 'BODY' === $node_name && 'html' === $token->namespace ) ) {
-						$index = null;
-					}
-				}
-
-				$attributes = array();
-				if ( $is_elem && ! $this->is_virtual() ) {
-					foreach ( array( 'id', 'role', 'class' ) as $attr_name ) {
-						$value = $this->get_attribute( $attr_name );
-						if ( null !== $value ) {
-							$attributes[ $attr_name ] = $value;
-						}
-					}
-				}
-
-				$this->element_breadcrumbs[] = array(
-					'tag'        => $node_name,
-					'namespace'  => $token->namespace,
-					'index'      => $index,
-					'attributes' => $attributes,
-				);
-			}
 		}
 
 		// Avoid sending close events for elements which don't expect a closing.
@@ -1261,37 +1157,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 	}
 
 	/**
-	 * Returns detailed breadcrumbs for the open stack, including indices and attributes.
-	 *
-	 * Each breadcrumb is represented as an associative array:
-	 *  - 'tag'        string   Node name
-	 *  - 'namespace'  string   One of 'html', 'svg', or 'math'
-	 *  - 'index'      int|null 1-based index among element children of the parent; null for HTML/BODY and non-elements
-	 *  - 'attributes' array    Subset of attributes captured at open: id, role, class (when available)
-	 *
-	 * @since 6.9.0
-	 *
-	 * @return array<int, array<string, mixed>> Detailed breadcrumbs for the current matched node.
-	 */
-	public function get_element_breadcrumbs(): array {
-		return $this->element_breadcrumbs;
-	}
-
-	/**
-	 * Enables or disables tracking of detailed breadcrumbs.
-	 *
-	 * When enabled, the processor will track element indices and selected attributes
-	 * (id, role, class) for each open element. Disabled by default to avoid overhead.
-	 *
-	 * @since 6.9.0
-	 *
-	 * @param bool $enabled Whether to enable detailed breadcrumb tracking.
-	 */
-	public function set_detailed_breadcrumbs_enabled( bool $enabled ): void {
-		$this->detailed_breadcrumbs_enabled = $enabled;
-	}
-
-	/**
 	 * Returns the nesting depth of the current location in the document.
 	 *
 	 * Example:
@@ -1553,7 +1418,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 		return $html;
 	}
-
 	/**
 	 * Parses next element in the 'initial' insertion mode.
 	 *
@@ -2287,7 +2151,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_BODY;
 		return $this->step( self::REPROCESS_CURRENT_NODE );
 	}
-
 	/**
 	 * Parses next element in the 'in body' insertion mode.
 	 *
@@ -3778,7 +3641,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE;
 		return $this->step( self::REPROCESS_CURRENT_NODE );
 	}
-
 	/**
 	 * Parses next element in the 'in table body' insertion mode.
 	 *
@@ -4552,7 +4414,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_BODY;
 		return $this->step( self::REPROCESS_CURRENT_NODE );
 	}
-
 	/**
 	 * Parses next element in the 'in frameset' insertion mode.
 	 *
@@ -5334,7 +5195,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 			? $this->current_element->token->node_name
 			: parent::get_token_name();
 	}
-
 	/**
 	 * Indicates the kind of matched token, if any.
 	 *
@@ -5678,8 +5538,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 				$this->change_parsing_namespace( 'html' );
 				$this->state->insertion_mode         = WP_HTML_Processor_State::INSERTION_MODE_INITIAL;
 				$this->breadcrumbs                   = array();
-				$this->element_breadcrumbs           = array();
-				$this->element_child_counts_by_depth = array();
 
 				$this->bookmarks['initial'] = new WP_HTML_Span( 0, 0 );
 				parent::seek( 'initial' );
@@ -5712,23 +5570,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 				$this->reset_insertion_mode_appropriately();
 				$this->breadcrumbs = array_slice( $this->breadcrumbs, 0, 2 );
-				if ( $this->detailed_breadcrumbs_enabled ) {
-					$this->element_breadcrumbs           = array(
-						array(
-							'tag'        => 'HTML',
-							'namespace'  => 'html',
-							'index'      => null,
-							'attributes' => array(),
-						),
-						array(
-							'tag'        => $this->context_node->node_name,
-							'namespace'  => $this->context_node->namespace,
-							'index'      => null,
-							'attributes' => array(),
-						),
-					);
-					$this->element_child_counts_by_depth = array();
-				}
 				parent::seek( $this->context_node->bookmark_name );
 			}
 		}
@@ -6021,7 +5862,6 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 		$this->bail( 'Cannot reconstruct active formatting elements when advancing and rewinding is required.' );
 	}
-
 	/**
 	 * Runs the reset the insertion mode appropriately algorithm.
 	 *
