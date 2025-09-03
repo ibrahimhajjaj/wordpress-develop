@@ -740,6 +740,7 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 		return false;
 	}
+
 	/**
 	 * Finds the next token in the HTML document.
 	 *
@@ -1418,6 +1419,7 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 		return $html;
 	}
+
 	/**
 	 * Parses next element in the 'initial' insertion mode.
 	 *
@@ -2151,6 +2153,7 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_BODY;
 		return $this->step( self::REPROCESS_CURRENT_NODE );
 	}
+
 	/**
 	 * Parses next element in the 'in body' insertion mode.
 	 *
@@ -3641,6 +3644,7 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_TABLE;
 		return $this->step( self::REPROCESS_CURRENT_NODE );
 	}
+
 	/**
 	 * Parses next element in the 'in table body' insertion mode.
 	 *
@@ -4414,6 +4418,7 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 		$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_IN_BODY;
 		return $this->step( self::REPROCESS_CURRENT_NODE );
 	}
+
 	/**
 	 * Parses next element in the 'in frameset' insertion mode.
 	 *
@@ -5195,6 +5200,7 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 			? $this->current_element->token->node_name
 			: parent::get_token_name();
 	}
+
 	/**
 	 * Indicates the kind of matched token, if any.
 	 *
@@ -5536,8 +5542,8 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 			 */
 			if ( null === $this->context_node ) {
 				$this->change_parsing_namespace( 'html' );
-				$this->state->insertion_mode         = WP_HTML_Processor_State::INSERTION_MODE_INITIAL;
-				$this->breadcrumbs                   = array();
+				$this->state->insertion_mode = WP_HTML_Processor_State::INSERTION_MODE_INITIAL;
+				$this->breadcrumbs           = array();
 
 				$this->bookmarks['initial'] = new WP_HTML_Span( 0, 0 );
 				parent::seek( 'initial' );
@@ -5862,6 +5868,7 @@ class WP_HTML_Processor extends WP_HTML_Tag_Processor {
 
 		$this->bail( 'Cannot reconstruct active formatting elements when advancing and rewinding is required.' );
 	}
+
 	/**
 	 * Runs the reset the insertion mode appropriately algorithm.
 	 *
